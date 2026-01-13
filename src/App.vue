@@ -20,7 +20,7 @@
         </div>
       </header>
 
-      <div class="workspace">
+      <div class="workspace" :class="{ 'sidebar-collapsed': !isHistoryExpanded }">
         <!-- 主交互区 -->
         <section class="stage">
           <div class="stage-inner">
@@ -71,20 +71,28 @@
         </section>
 
         <!-- 侧边栏 / 历史记录 -->
-        <aside class="sidebar">
-          <div class="sidebar-header">
-            <h2>历史记录</h2>
-            <button v-if="history.length > 0" class="text-link" @click="clearHistory">清空</button>
-          </div>
-          <div class="history-scroll">
-            <transition-group name="list-slide">
-              <div v-for="item in history" :key="item.id" class="history-card">
-                <time>{{ item.time }}</time>
-                <div class="history-names">{{ item.names.join('、') }}</div>
+        <aside class="sidebar" :class="{ 'is-collapsed': !isHistoryExpanded }">
+          <button class="expand-toggle" @click="isHistoryExpanded = !isHistoryExpanded" :title="isHistoryExpanded ? '折叠历史' : '展开历史'">
+            <svg class="icon-sm transition-icon" :class="{ 'rotated': isHistoryExpanded }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+          
+          <div class="sidebar-content">
+            <div class="sidebar-header">
+              <h2>历史记录</h2>
+              <button v-if="history.length > 0" class="text-link" @click="clearHistory">清空</button>
+            </div>
+            <div class="history-scroll">
+              <transition-group name="list-slide">
+                <div v-for="item in history" :key="item.id" class="history-card">
+                  <time>{{ item.time }}</time>
+                  <div class="history-names">{{ item.names.join('、') }}</div>
+                </div>
+              </transition-group>
+              <div v-if="history.length === 0" class="empty-history">
+                暂无记录
               </div>
-            </transition-group>
-            <div v-if="history.length === 0" class="empty-history">
-              暂无记录
             </div>
           </div>
         </aside>
@@ -111,6 +119,7 @@ const names = ref([])
 const pickCount = ref(1)
 const displayNames = ref(['准备就绪'])
 const isRolling = ref(false)
+const isHistoryExpanded = ref(false)
 
 let timer = null
 
@@ -289,6 +298,11 @@ body {
   gap: 60px;
   padding: 40px 0;
   overflow: hidden;
+  transition: grid-template-columns 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.workspace.sidebar-collapsed {
+  grid-template-columns: 1fr 60px;
 }
 
 .stage {
@@ -453,9 +467,59 @@ input:checked + .slider::before { transform: translateX(16px); }
 
 .sidebar {
   border-left: 1px solid var(--border-color);
-  padding-left: 40px;
+  padding-left: 0;
   display: flex;
   flex-direction: column;
+  position: relative;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar.is-collapsed {
+  padding-left: 0;
+}
+
+.sidebar-content {
+  padding-left: 40px;
+  opacity: 1;
+  transition: opacity 0.3s;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar.is-collapsed .sidebar-content {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.expand-toggle {
+  position: absolute;
+  left: -20px;
+  top: 0;
+  width: 40px;
+  height: 40px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  transition: all 0.2s;
+}
+
+.expand-toggle:hover {
+  background: var(--bg-secondary);
+  transform: scale(1.1);
+}
+
+.transition-icon {
+  transition: transform 0.4s ease;
+  transform: rotate(180deg);
+}
+
+.transition-icon.rotated {
+  transform: rotate(0deg);
 }
 
 .sidebar-header {
