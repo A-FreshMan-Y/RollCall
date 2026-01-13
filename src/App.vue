@@ -17,6 +17,12 @@
             </svg>
             <span>名单管理</span>
           </button>
+          <button class="ghost-btn" @click="isHistoryExpanded = !isHistoryExpanded" :class="{ 'active': isHistoryExpanded }">
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>点名历史</span>
+          </button>
         </div>
       </header>
 
@@ -57,12 +63,12 @@
               </transition-group>
             </div>
 
-            <div class="cta-area">
+            <div v-if="names.length > 0" class="cta-area">
               <button 
                 class="action-btn" 
                 :class="{ 'is-loading': isRolling }"
                 @click="startPick" 
-                :disabled="isRolling || names.length === 0"
+                :disabled="isRolling"
               >
                 {{ isRolling ? '正在抽取...' : '开始抽取' }}
               </button>
@@ -72,12 +78,6 @@
 
         <!-- 侧边栏 / 历史记录 -->
         <aside class="sidebar" :class="{ 'is-collapsed': !isHistoryExpanded }">
-          <button class="expand-toggle" @click="isHistoryExpanded = !isHistoryExpanded" :title="isHistoryExpanded ? '折叠历史' : '展开历史'">
-            <svg class="icon-sm transition-icon" :class="{ 'rotated': isHistoryExpanded }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          </button>
-          
           <div class="sidebar-content">
             <div class="sidebar-header">
               <h2>历史记录</h2>
@@ -262,6 +262,11 @@ body {
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid var(--border-color);
+}
+
+.sys-actions {
+  display: flex;
+  gap: 16px;
 }
 
 .brand {
@@ -578,8 +583,12 @@ input:checked + .slider::before { transform: translateX(16px); }
   transition: all 0.2s;
 }
 
-.ghost-btn:hover {
+.ghost-btn:hover, .ghost-btn.active {
   background: var(--bg-secondary);
+}
+
+.ghost-btn.active {
+  border-color: var(--accent-color);
 }
 
 .text-link {
