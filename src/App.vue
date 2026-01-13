@@ -28,36 +28,33 @@
               <div class="control-group">
                 <label>抽取人数</label>
                 <select v-model="pickCount" :disabled="isRolling" class="minimal-select">
-                  <option v-for="n in 10" :key="n" :value="n">{{ n }} 人</option>
+                  <option v-for="n in 5" :key="n" :value="n">{{ n }} 人</option>
                 </select>
               </div>
               
-              <div class="control-group row">
-                <label class="toggle">
-                  <input type="checkbox" v-model="allowRepeat" :disabled="isRolling" />
-                  <span class="slider"></span>
-                  <span class="label-text">允许重复</span>
-                </label>
-                <label class="toggle">
-                  <input type="checkbox" v-model="removeAfterPick" :disabled="isRolling" />
-                  <span class="slider"></span>
-                  <span class="label-text">抽后移出</span>
-                </label>
-              </div>
+              <!-- uniqueMode 默认开启且处于隐藏状态 -->
             </div>
 
             <div class="result-display" :class="{ 'rolling': isRolling }">
-              <transition-group name="name-fade" tag="div" class="names-container">
+              <div v-if="names.length === 0" class="empty-state-container">
+                <div class="empty-hint">请先加载名单以开始点名</div>
+                <button class="ghost-btn large" @click="loadNames">
+                  <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                  </svg>
+                  <span>点击导入名单</span>
+                </button>
+              </div>
+              <transition-group v-else name="name-fade" tag="div" class="names-container">
                 <div v-for="(name, index) in displayNames" 
                      :key="index + '-' + name" 
                      class="name-box">
                   {{ name }}
                 </div>
               </transition-group>
-              
-              <div v-if="names.length === 0" class="empty-hint">
-                请先加载名单以开始点名
-              </div>
             </div>
 
             <div class="cta-area">
@@ -108,8 +105,7 @@
 <script setup>
 import { ref, watch, onMounted } from 'vue'
 
-const allowRepeat = ref(true)
-const removeAfterPick = ref(false)
+const uniqueMode = ref(true)
 const history = ref([])
 const names = ref([])
 const pickCount = ref(1)
@@ -124,26 +120,37 @@ function startPick() {
   isRolling.value = true
   
   timer = setInterval(() => {
-    let pool = allowRepeat.value ? names.value : [...names.value]
-    
+    // 滚动动画期间不修改源名单，仅作展示
+    const pool = names.value
     displayNames.value = Array.from({ length: pickCount.value }, () => {
       if (!pool.length) return '空'
       const index = Math.floor(Math.random() * pool.length)
-      const picked = pool[index]
-      if (!allowRepeat.value) pool.splice(index, 1)
-      return picked
+      return pool[index]
     })
   }, 50)
 
   setTimeout(() => {
     clearInterval(timer)
+    
+    // 最终选定结果：确保结果本身的唯一性（如果开启了不重复抽取）
+    let pool = [...names.value]
+    const finalSelection = []
+    
+    for (let i = 0; i < pickCount.value; i++) {
+      if (pool.length === 0) break
+      const index = Math.floor(Math.random() * pool.length)
+      finalSelection.push(pool[index])
+      if (uniqueMode.value) {
+        pool.splice(index, 1)
+      }
+    }
+    
+    displayNames.value = finalSelection
     isRolling.value = false
     
-    if (removeAfterPick.value) {
-      displayNames.value.forEach(name => {
-        const index = names.value.indexOf(name)
-        if (index !== -1) names.value.splice(index, 1)
-      })
+    // 如果开启了不重复抽取，同步更新源名单
+    if (uniqueMode.value) {
+      names.value = pool
     }
 
     history.value.unshift({
@@ -182,16 +189,14 @@ onMounted(() => {
   const saved = localStorage.getItem('rollcall-v3')
   if (saved) {
     const s = JSON.parse(saved)
-    allowRepeat.value = s.allowRepeat
-    removeAfterPick.value = s.removeAfterPick
+    uniqueMode.value = s.uniqueMode ?? true
     pickCount.value = s.pickCount || 1
   }
 })
 
-watch([allowRepeat, removeAfterPick, pickCount], () => {
+watch([uniqueMode, pickCount], () => {
   localStorage.setItem('rollcall-v3', JSON.stringify({
-    allowRepeat: allowRepeat.value,
-    removeAfterPick: removeAfterPick.value,
+    uniqueMode: uniqueMode.value,
     pickCount: pickCount.value
   }))
 })
@@ -391,16 +396,34 @@ input:checked + .slider::before { transform: translateX(16px); }
 }
 
 .name-box {
-  font-size: 4rem;
+  font-size: clamp(2rem, 8vw, 4rem);
   font-weight: 800;
   letter-spacing: -0.04em;
-  line-height: 1;
+  line-height: 1.2;
+  border-left: 4px solid var(--accent-color);
+  padding-left: 12px;
+}
+
+.empty-state-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 24px;
 }
 
 .empty-hint {
-  color: var(--text-secondary);
-  font-size: 1.125rem;
-  font-weight: 400;
+  font-size: clamp(2rem, 8vw, 4rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.2;
+  border-left: 4px solid var(--accent-color);
+  padding-left: 12px;
+  color: var(--text-primary);
+}
+
+.ghost-btn.large {
+  padding: 12px 24px;
+  font-size: 1rem;
 }
 
 .action-btn {
