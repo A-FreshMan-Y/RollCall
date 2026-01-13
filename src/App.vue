@@ -72,11 +72,11 @@
               <button 
                 class="prime-btn" 
                 @click="startPick" 
-                :disabled="isRolling"
+                :disabled="names.length === 0"
               >
                 <div class="btn-inner">
                   <span v-if="!isRolling">开启随机筛选</span>
-                  <span v-else class="rolling-text">正在检索...</span>
+                  <span v-else class="rolling-text">停止滚动</span>
                 </div>
                 <div class="btn-progress" :style="{ width: isRolling ? '100%' : '0%' }"></div>
               </button>
@@ -139,10 +139,16 @@ const isRolling = ref(false)
 const isHistoryExpanded = ref(false)
 
 let timer = null
+let autoStopTimer = null
 
 // -- 核心逻辑 --
 function startPick() {
-  if (isRolling.value || names.value.length === 0) return
+  if (isRolling.value) {
+    stopPick()
+    return
+  }
+  
+  if (names.value.length === 0) return
   
   isRolling.value = true
   
@@ -155,34 +161,44 @@ function startPick() {
     })
   }, 60)
 
-  // 最终选择
-  setTimeout(() => {
-    clearInterval(timer)
-    
-    let currentPool = [...names.value]
-    const selected = []
-    
-    for (let i = 0; i < pickCount.value; i++) {
-      if (currentPool.length === 0) break
-      const idx = Math.floor(Math.random() * currentPool.length)
-      selected.push(currentPool[idx])
-      if (uniqueMode.value) currentPool.splice(idx, 1)
-    }
-    
-    displayNames.value = selected
-    isRolling.value = false
-    
-    if (uniqueMode.value) names.value = currentPool
+  // 自动停止定时器（改为 8s）
+  autoStopTimer = setTimeout(() => {
+    stopPick()
+  }, 8000)
+}
 
-    // 更新历史
-    history.value.unshift({
-      id: Date.now(),
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      names: [...selected]
-    })
-    
-    if (history.value.length > 30) history.value.pop()
-  }, 1000)
+function stopPick() {
+  if (!isRolling.value) return
+  
+  clearInterval(timer)
+  if (autoStopTimer) clearTimeout(autoStopTimer)
+  
+  let currentPool = [...names.value]
+  const selected = []
+  
+  for (let i = 0; i < pickCount.value; i++) {
+    if (currentPool.length === 0) break
+    const idx = Math.floor(Math.random() * currentPool.length)
+    selected.push(currentPool[idx])
+    if (uniqueMode.value) currentPool.splice(idx, 1)
+  }
+  
+  displayNames.value = selected
+  isRolling.value = false
+  
+  if (uniqueMode.value) names.value = currentPool
+
+  // 更新历史
+  history.value.unshift({
+    id: Date.now(),
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    names: [...selected]
+  })
+  
+  if (history.value.length > 30) history.value.pop()
+  
+  timer = null
+  autoStopTimer = null
 }
 
 async function loadNames() {
@@ -276,7 +292,7 @@ body {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 0 60px;
+  padding: 0 4vw; /* 使用响应式内边距 */
   max-width: 1600px;
   margin: 0 auto;
 }
@@ -362,7 +378,7 @@ body {
   display: grid;
   grid-template-columns: 1fr 0px;
   gap: 0;
-  padding: 80px 0;
+  padding: 2vh 0; /* 减小垂直内边距 */
   overflow: hidden;
   transition: grid-template-columns var(--transition-smooth);
 }
@@ -387,10 +403,13 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  /* 关键：确保主容器不超出视口高度，并根据需要微调缩放 */
+  max-height: 70vh;
+  justify-content: center;
 }
 
 .config-bar {
-  margin-bottom: 60px;
+  margin-bottom: 40px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -427,11 +446,11 @@ body {
 
 /* 舞台展示 */
 .display-stage {
-  min-height: 280px;
+  min-height: 200px;
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-bottom: 80px;
+  margin-bottom: 40px;
   position: relative;
   width: 100%;
 }
@@ -444,13 +463,13 @@ body {
 }
 
 .name-tile {
-  font-size: 6rem;
+  font-size: clamp(2.5rem, 10vh, 5.5rem); /* 根据高度动态缩放字号 */
   font-weight: 800;
   letter-spacing: -0.05em;
   line-height: 1.1;
   color: var(--text-main);
-  padding: 12px 24px;
-  border-bottom: 8px solid var(--text-main);
+  padding: 0.8vh 20px;
+  border-bottom: 0.8vh solid var(--text-main);
   transition: all 0.4s ease;
 }
 
@@ -470,7 +489,7 @@ body {
 }
 
 .empty-title {
-  font-size: 3.5rem;
+  font-size: clamp(2rem, 6vh, 3.5rem);
   font-weight: 800;
   color: var(--text-dim);
   letter-spacing: -0.04em;
@@ -504,7 +523,6 @@ body {
 
 /* 主要操作按钮 */
 .action-dock {
-  margin-top: auto;
   width: 100%;
   display: flex;
   justify-content: center;
@@ -514,7 +532,7 @@ body {
   position: relative;
   width: 100%;
   max-width: 400px;
-  padding: 32px;
+  padding: 3vh 32px; /* 响应式内边距 */
   background: var(--text-main);
   color: var(--bg-main);
   border: none;
@@ -530,7 +548,7 @@ body {
 
 .prime-btn:disabled {
   opacity: 0.6;
-  cursor: wait;
+  cursor: not-allowed;
 }
 
 .btn-inner {
