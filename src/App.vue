@@ -25,12 +25,45 @@
             <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke-width="2" stroke-linecap="round"/>
             </svg>
-            <span>点名历史</span>
+            <span>抽取历史</span>
           </button>
         </div>
       </header>
 
-      <main class="workspace" :class="{ 'sidebar-open': isHistoryExpanded }">
+      <main class="workspace" :class="{ 
+        'right-open': isHistoryExpanded, 
+        'left-open': isListExpanded 
+      }">
+        <!-- 核心名单侧边栏 (左侧) -->
+        <aside class="list-sidebar">
+          <div class="sidebar-inner mirrored">
+            <header class="sidebar-head">
+              <h3>成员名单</h3>
+              <div class="header-badge">{{ names.length }}</div>
+            </header>
+            
+            <div class="history-list">
+              <transition-group name="item-anim-left">
+                <div v-for="(name, idx) in names" :key="name + idx" class="list-entry">
+                  <span class="entry-index">{{ idx + 1 }}</span>
+                  <span class="entry-name">{{ name }}</span>
+                </div>
+              </transition-group>
+              
+              <div v-if="names.length === 0" class="no-history">
+                <div class="blank-icon">⚠</div>
+                <p>名单当前为空</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 左侧悬浮折叠按钮 -->
+          <button class="sidebar-toggle-float left" @click="isListExpanded = false" v-if="isListExpanded" title="折叠名单">
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+        </aside>
         <!-- 主交互区 -->
         <section class="selection-hub">
           <div class="hub-container">
@@ -48,7 +81,7 @@
 
             <!-- 展示舞台 -->
             <div class="display-stage" :class="{ 'is-rolling': isRolling }">
-              <div v-if="names.length === 0" class="empty-state">
+              <div v-if="!listLoaded" class="empty-state">
                 <h2 class="empty-title">尚未加载名单</h2>
                 <p class="empty-desc">请从右上方或下方按钮导入您的成员名单</p>
                 <button class="ghost-cta" @click="loadNames">
@@ -68,24 +101,39 @@
             </div>
 
             <!-- 动作区域 -->
-            <div v-if="names.length > 0" class="action-dock">
-              <button 
-                class="prime-btn" 
-                @click="startPick" 
-                :disabled="names.length === 0"
-              >
-                <div class="btn-inner">
-                  <span v-if="!isRolling">开启随机筛选</span>
-                  <span v-else class="rolling-text">停止滚动</span>
-                </div>
-                <div class="btn-progress" :style="{ width: isRolling ? '100%' : '0%' }"></div>
-              </button>
+            <div v-if="listLoaded" class="action-dock">
+              <template v-if="names.length > 0 || isRolling">
+                <button 
+                  class="prime-btn" 
+                  @click="startPick" 
+                  :disabled="names.length === 0 && !isRolling"
+                >
+                  <div class="btn-inner">
+                    <span v-if="!isRolling">开启随机筛选</span>
+                    <span v-else class="rolling-text">停止滚动</span>
+                  </div>
+                  <div class="btn-progress" :style="{ width: isRolling ? '100%' : '0%' }"></div>
+                </button>
+              </template>
+              <div v-else class="exhausted-hint">
+                <p class="exhaust-msg">名单已全部抽取完毕</p>
+                <button class="ghost-cta mini" @click="loadNames">
+                  重新同步名单
+                </button>
+              </div>
             </div>
           </div>
         </section>
 
         <!-- 侧边历史记录 -->
         <aside class="history-sidebar">
+          <!-- 悬浮折叠按钮 -->
+          <button class="sidebar-toggle-float" @click="isHistoryExpanded = false" v-if="isHistoryExpanded" title="折叠历史">
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M9 18l6-6-6-6" />
+            </svg>
+          </button>
+          
           <div class="sidebar-inner">
             <header class="sidebar-head">
               <h3>记录回顾</h3>
@@ -114,7 +162,7 @@
 
       <!-- 状态页脚 -->
       <footer class="footer">
-        <div class="footer-left">
+        <div class="footer-left" @click="isListExpanded = !isListExpanded" title="展开/收起成员名单">
           <span class="status-dot" :class="{ 'has-data': names.length > 0 }"></span>
           <span>当前名单共 {{ names.length }} 人</span>
         </div>
@@ -137,6 +185,8 @@ const pickCount = ref(1)
 const displayNames = ref(['准备就绪'])
 const isRolling = ref(false)
 const isHistoryExpanded = ref(false)
+const isListExpanded = ref(false)
+const listLoaded = ref(false)
 
 let timer = null
 let autoStopTimer = null
@@ -206,6 +256,8 @@ async function loadNames() {
     // 非桌面环境模拟数据
     names.value = ['张伟', '王芳', '李静', '刘强', '陈洋', '杨明', '黄勇', '吴倩']
     displayNames.value = ['演示名单就绪']
+    listLoaded.value = true
+    isListExpanded.value = true // 导入后自动展示名单
     return
   }
 
@@ -214,6 +266,8 @@ async function loadNames() {
     if (result && result.length > 0) {
       names.value = result
       displayNames.value = ['名单已同步 (' + result.length + ')']
+      listLoaded.value = true
+      isListExpanded.value = true // 导入后自动展示名单
     }
   } catch (err) {
     console.error('File load failed:', err)
@@ -372,20 +426,27 @@ body {
   height: 20px;
 }
 
-/* 工作区结构 */
+/* 工作区结构 - 三栏式 */
 .workspace {
   flex: 1;
   display: grid;
-  grid-template-columns: 1fr 0px;
+  grid-template-columns: 0px 1fr 0px;
   gap: 0;
-  padding: 2vh 0; /* 减小垂直内边距 */
+  padding: 2vh 0;
   overflow: hidden;
-  transition: grid-template-columns var(--transition-smooth);
+  transition: all var(--transition-smooth);
 }
 
-.workspace.sidebar-open {
-  grid-template-columns: 1fr var(--sidebar-width);
-  gap: 80px;
+.workspace.left-open {
+  grid-template-columns: var(--sidebar-width) 1fr 0px;
+}
+
+.workspace.right-open {
+  grid-template-columns: 0px 1fr var(--sidebar-width);
+}
+
+.workspace.left-open.right-open {
+  grid-template-columns: var(--sidebar-width) 1fr var(--sidebar-width);
 }
 
 /* 点名核心区 */
@@ -521,6 +582,12 @@ body {
   box-shadow: 0 10px 30px rgba(0,0,0,0.1);
 }
 
+.ghost-cta.mini {
+  padding: 12px 24px;
+  font-size: 0.85rem;
+  margin-top: 16px;
+}
+
 /* 主要操作按钮 */
 .action-dock {
   width: 100%;
@@ -574,22 +641,87 @@ body {
   animation: pulse 1s infinite alternate;
 }
 
+.exhausted-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.exhausted-hint p.exhaust-msg {
+  color: var(--text-dim);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* 侧边栏悬浮按钮 */
+.sidebar-toggle-float {
+  position: absolute;
+  right: -20px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  background: var(--bg-main);
+  border: 1px solid var(--border-medium);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sidebar-toggle-float.left {
+  right: auto;
+  left: auto;
+  right: -20px; /* 逻辑调整：始终位于侧边栏与主区交界处 */
+}
+
+/* 重新定位 */
+.history-sidebar .sidebar-toggle-float {
+  left: -20px;
+  right: auto;
+}
+
+.list-sidebar .sidebar-toggle-float {
+  right: -20px;
+  left: auto;
+}
+
+.sidebar-toggle-float:hover {
+  transform: translateY(-50%) scale(1.1);
+  background: var(--text-main);
+  color: var(--bg-main);
+  border-color: var(--text-main);
+}
+
 @keyframes pulse {
   0% { opacity: 0.5; }
   100% { opacity: 1; }
 }
 
-/* 侧边历史记录 */
-.history-sidebar {
-  border-left: 2px solid var(--border-light);
+/* 统一侧边栏基础 */
+.history-sidebar, .list-sidebar {
+  border-left: 1px solid var(--border-light);
   overflow: hidden;
   opacity: 0;
   transform: translateX(40px);
   pointer-events: none;
   transition: all var(--transition-smooth);
+  position: relative;
 }
 
-.sidebar-open .history-sidebar {
+.list-sidebar {
+  border-left: none;
+  border-right: 1px solid var(--border-light);
+  transform: translateX(-40px);
+}
+
+.left-open .list-sidebar, .right-open .history-sidebar {
   opacity: 1;
   transform: translateX(0);
   pointer-events: auto;
@@ -602,11 +734,45 @@ body {
   flex-direction: column;
 }
 
+.sidebar-inner.mirrored {
+  padding-left: 0;
+  padding-right: 40px;
+}
+
 .sidebar-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 40px;
+}
+
+.header-badge {
+  background: var(--text-main);
+  color: var(--bg-main);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.list-entry {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.entry-index {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  width: 20px;
+}
+
+.entry-name {
+  font-weight: 600;
+  color: var(--text-main);
 }
 
 .sidebar-head h3 {
@@ -691,6 +857,21 @@ body {
   letter-spacing: 0.1em;
 }
 
+.footer-left {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 8px 16px;
+  margin-left: -16px;
+  border-radius: 8px;
+  transition: all 0.3s;
+}
+
+.footer-left:hover {
+  background: var(--border-light);
+  color: var(--text-main);
+}
+
 .status-dot {
   display: inline-block;
   width: 8px;
@@ -714,12 +895,19 @@ body {
   transform: translateY(20px);
 }
 
-.item-anim-enter-active, .item-anim-leave-active {
+.item-anim-enter-active, .item-anim-leave-active,
+.item-anim-left-enter-active, .item-anim-left-leave-active {
   transition: all 0.4s ease;
 }
+
 .item-anim-enter-from {
   opacity: 0;
   transform: translateX(20px);
+}
+
+.item-anim-left-enter-from {
+  opacity: 0;
+  transform: translateX(-20px);
 }
 
 /* 自定义滚动条 */
