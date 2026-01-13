@@ -1,250 +1,540 @@
 <template>
-  <div class="app">
-    <header class="header">
-      🎯 随机点名
-    </header>
+  <div class="app-shell">
+    <div class="main-wrapper">
+      <!-- 极简顶部栏 -->
+      <header class="site-header">
+        <div class="brand">
+          <span class="brand-dot"></span>
+          <h1>随机点名 <span class="version">Pro Plus Max</span></h1>
+        </div>
+        <div class="sys-actions">
+          <button class="ghost-btn" @click="loadNames">
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+            <span>名单管理</span>
+          </button>
+        </div>
+      </header>
 
-    <main class="main">
-      <div class="control">
-        <label>抽取人数：</label>
-        <select v-model="pickCount">
-          <option>1</option>
-          <option>2</option>
-          <option>3</option>
-          <option>4</option>
-          <option>5</option>
-        </select>
+      <div class="workspace">
+        <!-- 主交互区 -->
+        <section class="stage">
+          <div class="stage-inner">
+            <div class="controls-grid">
+              <div class="control-group">
+                <label>抽取人数</label>
+                <select v-model="pickCount" :disabled="isRolling" class="minimal-select">
+                  <option v-for="n in 10" :key="n" :value="n">{{ n }} 人</option>
+                </select>
+              </div>
+              
+              <div class="control-group row">
+                <label class="toggle">
+                  <input type="checkbox" v-model="allowRepeat" :disabled="isRolling" />
+                  <span class="slider"></span>
+                  <span class="label-text">允许重复</span>
+                </label>
+                <label class="toggle">
+                  <input type="checkbox" v-model="removeAfterPick" :disabled="isRolling" />
+                  <span class="slider"></span>
+                  <span class="label-text">抽后移出</span>
+                </label>
+              </div>
+            </div>
 
-        <label class="option">
-          <input type="checkbox" v-model="allowRepeat" />
-          允许重复抽取
-        </label>
+            <div class="result-display" :class="{ 'rolling': isRolling }">
+              <transition-group name="name-fade" tag="div" class="names-container">
+                <div v-for="(name, index) in displayNames" 
+                     :key="index + '-' + name" 
+                     class="name-box">
+                  {{ name }}
+                </div>
+              </transition-group>
+              
+              <div v-if="names.length === 0" class="empty-hint">
+                请先加载名单以开始点名
+              </div>
+            </div>
 
-        <label class="option">
-          <input type="checkbox" v-model="removeAfterPick" />
-          抽中后移出名单
-        </label>
+            <div class="cta-area">
+              <button 
+                class="action-btn" 
+                :class="{ 'is-loading': isRolling }"
+                @click="startPick" 
+                :disabled="isRolling || names.length === 0"
+              >
+                {{ isRolling ? '正在抽取...' : '开始抽取' }}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 侧边栏 / 历史记录 -->
+        <aside class="sidebar">
+          <div class="sidebar-header">
+            <h2>历史记录</h2>
+            <button v-if="history.length > 0" class="text-link" @click="clearHistory">清空</button>
+          </div>
+          <div class="history-scroll">
+            <transition-group name="list-slide">
+              <div v-for="item in history" :key="item.id" class="history-card">
+                <time>{{ item.time }}</time>
+                <div class="history-names">{{ item.names.join('、') }}</div>
+              </div>
+            </transition-group>
+            <div v-if="history.length === 0" class="empty-history">
+              暂无记录
+            </div>
+          </div>
+        </aside>
       </div>
 
-      <div class="display">
-        <span v-for="(name, index) in displayNames" :key="index">
-          {{ name }}
-        </span>
-      </div>
-
-      <button class="start-btn" @click="startPick">
-        开始抽取
-      </button>
-    </main>
-
-    <footer class="footer">
-      <button class="link-btn">⚙ 设置</button>
-      <button class="link-btn" @click="loadNames">
-        👥 名单管理
-      </button>
-    </footer>
-  </div>
-
-  <div class="history">
-    <h3>抽取历史</h3>
-    <ul>
-      <li v-for="(item, i) in history" :key="i">
-        {{ item.time }}：{{ item.names.join('、') }}
-      </li>
-    </ul>
+      <footer class="site-footer">
+        <div class="stats">
+          总人数：<strong>{{ names.length }}</strong>
+        </div>
+        <div class="legal">
+          &copy; 2026 随机点名 Pro Plus Max
+        </div>
+      </footer>
+    </div>
   </div>
 </template>
 
 <script setup>
+import { ref, watch, onMounted } from 'vue'
 
-import { ref } from 'vue'
-import { watch, onMounted } from 'vue'
-
-// 是否允许重复抽取
 const allowRepeat = ref(true)
-
-// 是否移除已抽取
 const removeAfterPick = ref(false)
-
-// 抽取历史
 const history = ref([])
-
-// 模拟名单
-// const names = ['张三', '李四', '王五', '赵六', '钱七', '孙八', '周九']
-
 const names = ref([])
-
-// 抽取人数
 const pickCount = ref(1)
+const displayNames = ref(['准备就绪'])
+const isRolling = ref(false)
 
-// 当前显示的名字数组
-const displayNames = ref(['准备开始'])
-
-// 定时器
 let timer = null
 
 function startPick() {
-  if (timer) return
-
+  if (isRolling.value || names.value.length === 0) return
+  
+  isRolling.value = true
+  
   timer = setInterval(() => {
     let pool = allowRepeat.value ? names.value : [...names.value]
-
+    
     displayNames.value = Array.from({ length: pickCount.value }, () => {
-      if (!pool.length) return '无可抽取人员'
-
+      if (!pool.length) return '空'
       const index = Math.floor(Math.random() * pool.length)
       const picked = pool[index]
-
-      if (!allowRepeat.value) {
-        pool.splice(index, 1)
-      }
-
+      if (!allowRepeat.value) pool.splice(index, 1)
       return picked
     })
-  }, 80)
-
+  }, 50)
 
   setTimeout(() => {
     clearInterval(timer)
+    isRolling.value = false
     
     if (removeAfterPick.value) {
       displayNames.value.forEach(name => {
-      const index = names.value.indexOf(name)
-        if (index !== -1) {
-          names.value.splice(index, 1)
-        }
+        const index = names.value.indexOf(name)
+        if (index !== -1) names.value.splice(index, 1)
       })
     }
+
     history.value.unshift({
-      time: new Date().toLocaleTimeString(),
+      id: Date.now(),
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       names: [...displayNames.value]
     })
-
-    timer = null
-  }, 2000)
+    
+    if (history.value.length > 30) history.value.pop()
+  }, 1200)
 }
 
 async function loadNames() {
   if (!window.electronAPI) {
-    alert('当前不是 Electron 环境')
+    names.value = ['张伟', '王芳', '李静', '刘强', '陈洋', '杨明', '黄勇', '吴倩']
+    displayNames.value = ['演示名单已加载']
     return
   }
 
-  const result = await window.electronAPI.openTxtFile()
-
-  if (result.length === 0) return
-
-  names.value = result
-  displayNames.value = ['名单已加载']
+  try {
+    const result = await window.electronAPI.openTxtFile()
+    if (result && result.length > 0) {
+      names.value = result
+      displayNames.value = ['名单已同步 (' + result.length + ')']
+    }
+  } catch (err) {
+    console.error(err)
+  }
 }
 
-	onMounted(() => {
-	const saved = localStorage.getItem('rollcall-settings')
-	if (saved) {
-		const s = JSON.parse(saved)
-		allowRepeat.value = s.allowRepeat
-		removeAfterPick.value = s.removeAfterPick
-	}
-	})
-	
-	watch([allowRepeat, removeAfterPick], () => {
-	localStorage.setItem(
-		'rollcall-settings',
-		JSON.stringify({
-		allowRepeat: allowRepeat.value,
-		removeAfterPick: removeAfterPick.value
-		})
-	)
-	})
+function clearHistory() {
+  history.value = []
+}
 
+onMounted(() => {
+  const saved = localStorage.getItem('rollcall-v3')
+  if (saved) {
+    const s = JSON.parse(saved)
+    allowRepeat.value = s.allowRepeat
+    removeAfterPick.value = s.removeAfterPick
+    pickCount.value = s.pickCount || 1
+  }
+})
 
+watch([allowRepeat, removeAfterPick, pickCount], () => {
+  localStorage.setItem('rollcall-v3', JSON.stringify({
+    allowRepeat: allowRepeat.value,
+    removeAfterPick: removeAfterPick.value,
+    pickCount: pickCount.value
+  }))
+})
 </script>
 
-
-
 <style>
-.display {
-  flex-wrap: wrap;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f9f9fb;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --border-color: #e5e7eb;
+  --accent-color: #000000;
+  --accent-contrast: #ffffff;
+  --danger: #ef4444;
+  --safe-area: 40px;
 }
 
-.display span {
-  min-width: 80px;
-  text-align: center;
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
-.app {
+body {
+  font-family: 'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', -apple-system, sans-serif;
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+.app-shell {
   height: 100vh;
-  background: #f5f7fa;
   display: flex;
   flex-direction: column;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-.header {
-  padding: 20px;
-  text-align: center;
-  font-size: 28px;
-  font-weight: bold;
+.main-wrapper {
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 0 var(--safe-area);
 }
 
-.main {
+.site-header {
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-dot {
+  width: 10px;
+  height: 10px;
+  background-color: var(--accent-color);
+  border-radius: 50%;
+}
+
+.brand h1 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.brand .version {
+  font-weight: 300;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  margin-left: 4px;
+}
+
+.workspace {
   flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 60px;
+  padding: 40px 0;
+  overflow: hidden;
+}
+
+.stage {
   display: flex;
   flex-direction: column;
-  align-items: center;
   justify-content: center;
 }
 
-.control {
-  margin-bottom: 20px;
-  font-size: 16px;
+.stage-inner {
+  max-width: 600px;
 }
 
-.control select {
-  margin-left: 10px;
-  padding: 6px 10px;
-}
-
-.display {
-  min-width: 400px;
-  min-height: 120px;
-  background: white;
-  border-radius: 16px;
-  padding: 20px;
-  margin-bottom: 30px;
+.controls-grid {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 20px;
-  font-size: 24px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  flex-direction: column;
+  gap: 24px;
+  margin-bottom: 60px;
 }
 
-.start-btn {
-  padding: 14px 40px;
-  font-size: 18px;
-  border-radius: 30px;
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.control-group.row {
+  flex-direction: row;
+  gap: 32px;
+}
+
+.control-group label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
+}
+
+.minimal-select {
+  padding: 10px 0;
   border: none;
-  background: #409eff;
-  color: white;
+  border-bottom: 2px solid var(--border-color);
+  background: transparent;
+  font-size: 1rem;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.minimal-select:focus {
+  border-color: var(--accent-color);
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   cursor: pointer;
 }
 
-.start-btn:hover {
-  background: #337ecc;
+.toggle .label-text {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-primary);
 }
 
-.footer {
-  padding: 16px;
+.toggle input { display: none; }
+
+.slider {
+  width: 36px;
+  height: 20px;
+  background-color: var(--border-color);
+  border-radius: 20px;
+  position: relative;
+  transition: 0.3s;
+}
+
+.slider::before {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  left: 3px;
+  top: 3px;
+  background-color: white;
+  border-radius: 50%;
+  transition: 0.3s;
+}
+
+input:checked + .slider { background-color: var(--accent-color); }
+input:checked + .slider::before { transform: translateX(16px); }
+
+.result-display {
+  min-height: 200px;
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 60px;
 }
 
-.link-btn {
+.names-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.name-box {
+  font-size: 4rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.empty-hint {
+  color: var(--text-secondary);
+  font-size: 1.125rem;
+  font-weight: 400;
+}
+
+.action-btn {
+  padding: 20px 48px;
+  background-color: var(--accent-color);
+  color: var(--accent-contrast);
+  border: none;
+  border-radius: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+}
+
+.action-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.action-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.action-btn:disabled {
+  background-color: var(--border-color);
+  cursor: not-allowed;
+}
+
+.sidebar {
+  border-left: 1px solid var(--border-color);
+  padding-left: 40px;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.sidebar-header h2 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.history-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 12px;
+}
+
+.history-card {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--bg-secondary);
+}
+
+.history-card time {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.history-names {
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.empty-history {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  padding-top: 20px;
+}
+
+.ghost-btn {
+  background: none;
+  border: 1px solid var(--border-color);
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ghost-btn:hover {
+  background: var(--bg-secondary);
+}
+
+.text-link {
   background: none;
   border: none;
-  font-size: 16px;
+  color: var(--danger);
+  font-size: 0.875rem;
   cursor: pointer;
-  color: #409eff;
 }
+
+.icon-sm {
+  width: 16px;
+  height: 16px;
+}
+
+.site-footer {
+  height: 80px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.name-fade-enter-active {
+  transition: opacity 0.3s, transform 0.3s;
+}
+.name-fade-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.list-slide-enter-active, .list-slide-leave-active {
+  transition: all 0.4s ease;
+}
+.list-slide-enter-from {
+  opacity: 0;
+  transform: translateX(20px);
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
 </style>
