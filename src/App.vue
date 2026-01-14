@@ -283,14 +283,12 @@ onMounted(() => {
   const saved = localStorage.getItem('rollcall-v4')
   if (saved) {
     const s = JSON.parse(saved)
-    uniqueMode.value = s.uniqueMode ?? false
     pickCount.value = s.pickCount || 1
   }
 })
 
-watch([uniqueMode, pickCount], () => {
+watch([pickCount], () => {
   localStorage.setItem('rollcall-v4', JSON.stringify({
-    uniqueMode: uniqueMode.value,
     pickCount: pickCount.value
   }))
 })
@@ -503,6 +501,52 @@ body {
 
 .pro-select:focus {
   border-color: var(--text-main);
+}
+
+/* 精致切换按钮 */
+.toggle-btn {
+  background: var(--bg-accent);
+  border: 1px solid var(--border-medium);
+  border-radius: 30px;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.3s;
+  min-width: 100px;
+  position: relative;
+}
+
+.toggle-btn.active {
+  background: var(--text-main);
+  border-color: var(--text-main);
+  color: var(--bg-main);
+}
+
+.toggle-dot {
+  width: 12px;
+  height: 12px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  transition: all 0.3s;
+}
+
+.toggle-btn.active .toggle-dot {
+  background: var(--bg-main);
+  transform: scale(1.2);
+}
+
+.toggle-text {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.toggle-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* 舞台展示 */
