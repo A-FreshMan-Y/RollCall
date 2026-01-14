@@ -178,7 +178,7 @@
 import { ref, watch, onMounted } from 'vue'
 
 // -- 状态管理 --
-const uniqueMode = ref(true) 
+const uniqueMode = ref(false) 
 const history = ref([])
 const names = ref([])
 const pickCount = ref(1)
@@ -283,7 +283,7 @@ onMounted(() => {
   const saved = localStorage.getItem('rollcall-v4')
   if (saved) {
     const s = JSON.parse(saved)
-    uniqueMode.value = s.uniqueMode ?? true
+    uniqueMode.value = s.uniqueMode ?? false
     pickCount.value = s.pickCount || 1
   }
 })
