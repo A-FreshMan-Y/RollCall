@@ -934,6 +934,9 @@ body {
 .name-anim-enter-active {
   transition: all 0.6s var(--transition-smooth);
 }
+.name-anim-leave-active {
+  display: none;
+}
 .name-anim-enter-from {
   opacity: 0;
   transform: translateY(20px);
