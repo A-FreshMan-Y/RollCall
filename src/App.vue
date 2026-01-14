@@ -90,7 +90,7 @@
               </div>
 
               <div v-else class="results-grid">
-                <transition-group name="name-anim">
+                <transition-group :name="isRolling ? 'name-anim' : 'result-anim'">
                   <div v-for="(name, index) in displayNames" 
                        :key="index + '-' + name" 
                        class="name-tile">
@@ -940,6 +940,18 @@ body {
 .name-anim-enter-from {
   opacity: 0;
   transform: translateY(20px);
+}
+
+/* 结果展示动效：消除空白 */
+.result-anim-enter-active {
+  transition: all 0.3s ease-out;
+}
+.result-anim-leave-active {
+  display: none; /* 关键：旧元素立刻消失，不占位 */
+}
+.result-anim-enter-from {
+  opacity: 0;
+  transform: scale(0.9); /* 只有轻微缩放，不再有大位移 */
 }
 
 .item-anim-enter-active, .item-anim-leave-active,
