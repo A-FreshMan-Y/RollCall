@@ -106,10 +106,11 @@
                 <button 
                   class="prime-btn" 
                   @click="startPick" 
-                  :disabled="names.length === 0 && !isRolling"
+                  :disabled="(names.length === 0 && !isRolling) || isStopping"
                 >
                   <div class="btn-inner">
                     <span v-if="!isRolling">开启随机筛选</span>
+                    <span v-else-if="isStopping" class="rolling-text">正在揭晓...</span>
                     <span v-else class="rolling-text">停止滚动</span>
                   </div>
                   <div class="btn-progress" :style="{ width: isRolling ? '100%' : '0%' }"></div>
@@ -187,6 +188,9 @@ const isRolling = ref(false)
 const isHistoryExpanded = ref(false)
 const isListExpanded = ref(false)
 const listLoaded = ref(false)
+const isStopping = ref(false) // 新增：正在揭晓状态
+const revealedCount = ref(0) // 新增：已揭晓数量
+const finalResult = ref([]) // 新增：最终结果暂存
 
 let timer = null
 let autoStopTimer = null
@@ -194,18 +198,25 @@ let autoStopTimer = null
 // -- 核心逻辑 --
 function startPick() {
   if (isRolling.value) {
-    stopPick()
+    if (!isStopping.value) stopPick()
     return
   }
   
   if (names.value.length === 0) return
   
   isRolling.value = true
+  isStopping.value = false
+  revealedCount.value = 0
+  finalResult.value = []
   
   // 滚动动画
   timer = setInterval(() => {
     const pool = names.value
-    displayNames.value = Array.from({ length: pickCount.value }, () => {
+    displayNames.value = Array.from({ length: pickCount.value }, (_, i) => {
+      // 如果该位置已揭晓，显示最终结果；否则显示随机
+      if (i < revealedCount.value) {
+        return finalResult.value[i]
+      }
       if (!pool.length) return '空'
       return pool[Math.floor(Math.random() * pool.length)]
     })
@@ -218,11 +229,15 @@ function startPick() {
 }
 
 function stopPick() {
-  if (!isRolling.value) return
+  if (!isRolling.value || isStopping.value) return
   
-  clearInterval(timer)
+  isStopping.value = true // 进入揭晓阶段，锁定按钮
+  
+  // 清除自动停止，防止干扰
   if (autoStopTimer) clearTimeout(autoStopTimer)
+  autoStopTimer = null
   
+  // 1. 预先计算最终结果
   let currentPool = [...names.value]
   const selected = []
   
@@ -233,22 +248,54 @@ function stopPick() {
     if (uniqueMode.value) currentPool.splice(idx, 1)
   }
   
-  displayNames.value = selected
-  isRolling.value = false
+  finalResult.value = selected // 存入最终结果，供 setInterval 读取
+
+  // 优化：如果是单人抽取，直接出结果，不等待
+  if (pickCount.value === 1) {
+    finishStopping(currentPool, selected)
+    return
+  }
+
+  // 2. 启动逐个揭晓逻辑
+  let currentStep = 0
   
-  if (uniqueMode.value) names.value = currentPool
+  const revealNext = () => {
+    revealedCount.value = currentStep + 1 // 锁定当前位置
+    
+    // 如果还有下一个，延迟后继续；否则结束
+    if (currentStep < pickCount.value - 1) {
+      currentStep++
+      // 动态间隔：第一个稍微快点，后面保持节奏
+      setTimeout(revealNext, 800)
+    } else {
+      setTimeout(() => {
+        finishStopping(currentPool, selected)
+      }, 500) // 最后一个揭晓后稍作停留再结束状态
+    }
+  }
+
+  // 立即开始揭晓第一个
+  revealNext()
+}
+
+function finishStopping(poolAfterPick, selectedNames) {
+  clearInterval(timer)
+  timer = null
+  
+  displayNames.value = selectedNames
+  isRolling.value = false
+  isStopping.value = false
+  
+  if (uniqueMode.value) names.value = poolAfterPick
 
   // 更新历史
   history.value.unshift({
     id: Date.now(),
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    names: [...selected]
+    names: [...selectedNames]
   })
   
   if (history.value.length > 30) history.value.pop()
-  
-  timer = null
-  autoStopTimer = null
 }
 
 async function loadNames() {
